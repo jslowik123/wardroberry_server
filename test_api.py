@@ -312,7 +312,7 @@ class WardroberryAPITester:
             print(f"❌ Fehler bei den Statistiken: {e}")
             return False
     
-    def run_complete_test(self):
+    def run_complete_test(self, image_path: Path = None):
         """
         Führt den kompletten Test-Durchlauf aus
         """
@@ -335,9 +335,11 @@ class WardroberryAPITester:
             return
         
         # 3. Test-Bild vorbereiten
-        image_path = self.create_test_image()
-        if not image_path:
-            print("❌ Kein Test-Bild verfügbar.")
+        if image_path is None:
+            image_path = self.create_test_image()
+        
+        if not image_path or not image_path.exists():
+            print("❌ Kein gültiges Test-Bild verfügbar.")
             return
         
         # 4. AI-Analyse testen (ohne Speicherung)
@@ -381,9 +383,33 @@ def main():
     # Erstelle Tester-Instanz
     tester = WardroberryAPITester()
     
-    # Führe Tests aus
+    # Frage nach Bildpfad
+    print("\n📸 Bildauswahl:")
+    image_path_input = "test_images/FullSizeRender.jpg"
+    
+    if image_path_input:
+        image_path = Path(image_path_input)
+        
+        # Validiere den Pfad
+        if not image_path.exists():
+            print(f"❌ Datei nicht gefunden: {image_path}")
+            print("Verwende automatisches Test-Bild...")
+            image_path = None
+        elif not image_path.is_file():
+            print(f"❌ Pfad ist keine Datei: {image_path}")
+            print("Verwende automatisches Test-Bild...")
+            image_path = None
+        elif image_path.suffix.lower() not in ['.jpg', '.jpeg', '.png']:
+            print(f"❌ Unsupported file format: {image_path.suffix}")
+            print("Unterstützte Formate: .jpg, .jpeg, .png")
+            print("Verwende automatisches Test-Bild...")
+            image_path = None
+        else:
+            print(f"✅ Verwende Bild: {image_path}")
+    
+    # Führe Tests aus3
     try:
-        tester.run_complete_test()
+        tester.run_complete_test(image_path)
     except KeyboardInterrupt:
         print("\n⏹️ Test durch Nutzer abgebrochen.")
     except Exception as e:

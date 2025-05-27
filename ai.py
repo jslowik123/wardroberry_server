@@ -71,7 +71,7 @@ class ClothingAI:
             
             # API-Aufruf
             response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-4.1-mini",
                 messages=[
                     {
                         "role": "system",
@@ -228,7 +228,7 @@ class ClothingAI:
             """
             
             response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-4.1-mini",
                 messages=[
                     {"role": "system", "content": "Du bist ein professioneller Modeberater."},
                     {"role": "user", "content": prompt}
@@ -255,7 +255,7 @@ class ClothingAI:
         try:
             # Einfacher Test-Call
             self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-4.1-mini",
                 messages=[{"role": "user", "content": "Hello"}],
                 max_tokens=5
             )
