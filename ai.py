@@ -231,22 +231,22 @@ class ClothingAI:
                         ],
                     }
                 ],
-                tools=[{"type": "image_generation"}],
+                tools=[{
+            "type": "image_generation",
+            "quality": "high", 
+            }],
             )
 
             # Token-Verbrauch anzeigen
             if hasattr(response, 'usage'):
-                prompt_tokens = response.usage.prompt_tokens
-                completion_tokens = response.usage.completion_tokens
-                total_tokens = response.usage.total_tokens
-
-                self.logger.info(f"Token-Verbrauch: {total_tokens}")
-                self.logger.info(f"Prompt Tokens: {prompt_tokens}")
-                self.logger.info(f"Completion Tokens: {completion_tokens}")
-                
+                usage = response.usage
+                input_tokens = usage.input_tokens
+                output_tokens = usage.output_tokens
+                total_tokens = usage.total_tokens
+    # Zusätzliche Details falls verfügbar
             else:
-                prompt_tokens = None
-                completion_tokens = None
+                input_tokens = None
+                output_tokens = None
                 total_tokens = None
 
             # Extrahiere das generierte Bild
@@ -256,9 +256,9 @@ class ClothingAI:
 
             if image_generation_calls:
                 image_base64 = image_generation_calls[0].result
-                with open("freigestelltes_kleidungsstück.png", "wb") as f:
+                with open("ergebnis.png", "wb") as f:
                     f.write(base64.b64decode(image_base64))
-                return {"status": "success", "image": image_base64, "prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens, "total_tokens": total_tokens}
+                return {"status": "success", "image": image_base64, "input_tokens": input_tokens, "output_tokens": output_tokens, "total_tokens": total_tokens}
             else:
                 return {"status": "error"}
         except Exception as e:
