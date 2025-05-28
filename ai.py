@@ -197,69 +197,73 @@ class ClothingAI:
             "confidence": 0.0
         }
     
-    def generate_outfit_description(self, user_id: str, weather_condition: str, 
-                                  occasion: str, mood: str) -> str:
+    
+    def encode_image(self, image_path):
+        with open(image_path, "rb") as image_file:
+            return base64.b64encode(image_file.read()).decode('utf-8')
+    
+    def extract_clothing(self, image_content: bytes) -> Dict[str, Any]:
         """
-        Generiert eine Outfit-Beschreibung basierend auf Parametern
+        Extrahiert Kleidungsstücke aus einem Bild mit OpenAI Vision API
         
         Args:
-            user_id: UUID des Nutzers
-            weather_condition: Wetterbedingung
-            occasion: Anlass
-            mood: Stimmung
+            image_content: Binärdaten des Bildes
             
         Returns:
-            Generierte Outfit-Beschreibung
+            Dict mit extrahierten Kleidungsstücken
         """
         try:
-            prompt = f"""
-            Erstelle eine kreative und ansprechende Beschreibung für ein Outfit mit folgenden Kriterien:
-            - Wetterbedingung: {weather_condition}
-            - Anlass: {occasion}
-            - Stimmung: {mood}
-            
-            Die Beschreibung sollte:
-            - Inspirierend und motivierend sein
-            - Konkrete Styling-Tipps enthalten
-            - Zur Stimmung und dem Anlass passen
-            - Maximal 2-3 Sätze lang sein
-            
-            Beispiel: "Ein elegantes Business-Outfit für den selbstbewussten Auftritt im Büro. Die Kombination aus klassischem Blazer und stilvoller Hose strahlt Professionalität aus, während dezente Accessoires den Look abrunden."
-            """
-            
-            response = self.client.chat.completions.create(
-                model="gpt-4.1-mini",
-                messages=[
-                    {"role": "system", "content": "Du bist ein professioneller Modeberater."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=150,
-                temperature=0.7
-            )
-            
-            description = response.choices[0].message.content.strip()
-            self.logger.info("Outfit-Beschreibung generiert")
-            return description
-            
-        except Exception as e:
-            self.logger.error(f"Fehler bei der Outfit-Beschreibung: {e}")
-            return f"Ein perfektes Outfit für {occasion} bei {weather_condition} Wetter, das zu Ihrer {mood} Stimmung passt."
+            base64_image = self.encode_image("test_2.jpg")
     
-    def health_check(self) -> bool:
-        """
-        Überprüft die OpenAI API Verbindung
-        
-        Returns:
-            True wenn API erreichbar ist
-        """
-        try:
-            # Einfacher Test-Call
-            self.client.chat.completions.create(
-                model="gpt-4.1-mini",
-                messages=[{"role": "user", "content": "Hello"}],
-                max_tokens=5
+            prompt = "Erstelle ein fotorealistisches Bild des Kleidungsstücks aus dem Referenzbild, isoliert auf weißem Hintergrund."
+
+            response = self.client.responses.create(
+                model="gpt-4.1",
+                input=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "input_text", "text": prompt},
+                            {
+                                "type": "input_image",
+                                "image_url": f"data:image/jpeg;base64,{base64_image}",
+                            },
+                        ],
+                    }
+                ],
+                tools=[{"type": "image_generation"}],
             )
-            return True
+
+            # Token-Verbrauch anzeigen
+            if hasattr(response, 'usage'):
+                prompt_tokens = response.usage.prompt_tokens
+                completion_tokens = response.usage.completion_tokens
+                total_tokens = response.usage.total_tokens
+
+                self.logger.info(f"Token-Verbrauch: {total_tokens}")
+                self.logger.info(f"Prompt Tokens: {prompt_tokens}")
+                self.logger.info(f"Completion Tokens: {completion_tokens}")
+                
+            else:
+                prompt_tokens = None
+                completion_tokens = None
+                total_tokens = None
+
+            # Extrahiere das generierte Bild
+            image_generation_calls = [
+                output for output in response.output if output.type == "image_generation_call"
+            ]
+
+            if image_generation_calls:
+                image_base64 = image_generation_calls[0].result
+                with open("freigestelltes_kleidungsstück.png", "wb") as f:
+                    f.write(base64.b64decode(image_base64))
+                return {"status": "success", "image": image_base64, "prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens, "total_tokens": total_tokens}
+            else:
+                return {"status": "error"}
         except Exception as e:
-            self.logger.error(f"OpenAI API Health Check fehlgeschlagen: {e}")
-            return False
+            self.logger.error(f"Fehler bei der Kleidungsanalyse: {e}")
+            return {"status": "error"}
+
+            
+
