@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  # Redis Queue für asynchrone Verarbeitung
+  redis:
+    image: redis:7-alpine
+    container_name: wardroberry_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Optional: Wardroberry API Server
+  api:
+    build: .
+    container_name: wardroberry_api
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    restart: unless-stopped
+    profiles: ["full"]  # Nur starten mit --profile full
+
+  # Optional: Wardroberry Worker
+  worker:
+    build: .
+    container_name: wardroberry_worker
+    command: python worker.py
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - MAX_RETRIES=3
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    restart: unless-stopped
+    profiles: ["full"]  # Nur starten mit --profile full
+
+volumes:
+  redis_data:
+
+# Verwendung:
+# Nur Redis starten: docker-compose up redis
+# Komplettes System: docker-compose --profile full up
+# Redis + Worker: docker-compose up redis worker 

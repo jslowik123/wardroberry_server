@@ -1,11 +1,10 @@
 fastapi==0.109.2
 uvicorn==0.27.1
 python-multipart==0.0.9
-pinecone-client==3.2.2
-PyPDF2==3.0.1
 python-dotenv==1.0.0
 langchain==0.1.12
 langchain-openai==0.0.8
 openai==1.76.0
-firebase-admin==6.8.0
 supabase==2.3.4
+PyJWT==2.8.0
+redis==5.0.1

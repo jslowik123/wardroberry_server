@@ -4,6 +4,15 @@ from typing import Optional, List, Dict, Any, Union
 from datetime import datetime, timezone
 from supabase import create_client, Client
 from postgrest.exceptions import APIError
+from enum import Enum
+
+
+class ProcessingStatus(Enum):
+    """Status der Kleidungsstück-Verarbeitung"""
+    PENDING = "pending"          # Gerade hochgeladen, wartet auf Verarbeitung
+    PROCESSING = "processing"    # Wird gerade verarbeitet (Extraktion + Analyse)
+    COMPLETED = "completed"      # Verarbeitung abgeschlossen
+    FAILED = "failed"           # Verarbeitung fehlgeschlagen
 
 
 class DatabaseManager:
@@ -130,7 +139,224 @@ class DatabaseManager:
             raise
 
     # ======================
-    # CLOTHES MANAGEMENT
+    # ERWEITERTE CLOTHES MANAGEMENT FÜR ASYNC PROCESSING
+    # ======================
+    
+    def create_pending_clothing_item(self, user_id: str, original_image_url: str, 
+                                   original_filename: str = None) -> Dict[str, Any]:
+        """
+        Erstellt sofort einen Eintrag für ein hochgeladenes Kleidungsstück
+        Status: PENDING - wartet auf Verarbeitung
+        
+        Args:
+            user_id: UUID des Nutzers
+            original_image_url: URL zum ursprünglichen Bild
+            original_filename: Ursprünglicher Dateiname (optional)
+            
+        Returns:
+            Dict mit den erstellten Kleidungsdaten (ID für Frontend)
+        """
+        try:
+            data = {
+                'user_id': user_id,
+                'image_url': original_image_url,
+                'original_filename': original_filename,
+                'processing_status': ProcessingStatus.PENDING.value,
+                'category': 'Wird analysiert...',  # Placeholder
+                'created_at': datetime.now(timezone.utc).isoformat(),
+                'updated_at': datetime.now(timezone.utc).isoformat()
+            }
+            
+            result = self.client.table('clothes').insert(data).execute()
+            
+            if not result.data:
+                raise Exception("Kleidungsstück konnte nicht erstellt werden")
+            
+            clothing_item = result.data[0]
+            self.logger.info(f"Pending Kleidungsstück erstellt: {clothing_item['id']}")
+            
+            return clothing_item
+            
+        except APIError as e:
+            self.logger.error(f"Fehler beim Erstellen des pending Kleidungsstücks: {e}")
+            raise
+    
+    def update_processing_status(self, clothing_id: str, status: ProcessingStatus) -> Dict[str, Any]:
+        """
+        Aktualisiert den Verarbeitungsstatus eines Kleidungsstücks
+        
+        Args:
+            clothing_id: UUID des Kleidungsstücks
+            status: Neuer ProcessingStatus
+            
+        Returns:
+            Dict mit aktualisierten Daten
+        """
+        try:
+            data = {
+                'processing_status': status.value,
+                'updated_at': datetime.now(timezone.utc).isoformat()
+            }
+            
+            result = self.client.table('clothes').update(data).eq('id', clothing_id).execute()
+            
+            if not result.data:
+                raise Exception(f"Kleidungsstück {clothing_id} nicht gefunden")
+            
+            self.logger.info(f"Status aktualisiert für {clothing_id}: {status.value}")
+            return result.data[0]
+            
+        except APIError as e:
+            self.logger.error(f"Fehler beim Aktualisieren des Status: {e}")
+            raise
+    
+    def complete_clothing_processing(self, clothing_id: str, 
+                                   extracted_image_url: str = None,
+                                   category: str = None, color: str = None, 
+                                   style: str = None, season: str = None,
+                                   material: str = None, occasion: str = None,
+                                   confidence: float = None) -> Dict[str, Any]:
+        """
+        Vervollständigt die Verarbeitung eines Kleidungsstücks mit allen AI-Daten
+        
+        Args:
+            clothing_id: UUID des Kleidungsstücks
+            extracted_image_url: URL zum extrahierten Bild (optional)
+            category: Erkannte Kategorie
+            color: Erkannte Farbe
+            style: Erkannter Stil
+            season: Erkannte Saison
+            material: Erkanntes Material
+            occasion: Erkannter Anlass
+            confidence: AI-Confidence Score
+            
+        Returns:
+            Dict mit vollständigen Kleidungsdaten
+        """
+        try:
+            # Alle erkannten Daten sammeln
+            update_data = {
+                'processing_status': ProcessingStatus.COMPLETED.value,
+                'updated_at': datetime.now(timezone.utc).isoformat()
+            }
+            
+            # Optional: Extrahiertes Bild
+            if extracted_image_url:
+                update_data['extracted_image_url'] = extracted_image_url
+            
+            # AI-Analyse Ergebnisse
+            if category:
+                update_data['category'] = category
+            if color:
+                update_data['color'] = color
+            if style:
+                update_data['style'] = style
+            if season:
+                update_data['season'] = season
+            if material:
+                update_data['material'] = material
+            if occasion:
+                update_data['occasion'] = occasion
+            if confidence is not None:
+                update_data['ai_confidence'] = confidence
+            
+            result = self.client.table('clothes').update(update_data).eq('id', clothing_id).execute()
+            
+            if not result.data:
+                raise Exception(f"Kleidungsstück {clothing_id} nicht gefunden")
+            
+            completed_item = result.data[0]
+            self.logger.info(f"Kleidungsstück-Verarbeitung abgeschlossen: {clothing_id}")
+            self.logger.info(f"Erkannt: {category} ({color}, {style})")
+            
+            return completed_item
+            
+        except APIError as e:
+            self.logger.error(f"Fehler beim Vervollständigen der Verarbeitung: {e}")
+            raise
+    
+    def mark_processing_failed(self, clothing_id: str, error_message: str = None) -> Dict[str, Any]:
+        """
+        Markiert ein Kleidungsstück als fehlgeschlagen verarbeitet
+        
+        Args:
+            clothing_id: UUID des Kleidungsstücks
+            error_message: Fehlermeldung (optional)
+            
+        Returns:
+            Dict mit aktualisierten Daten
+        """
+        try:
+            update_data = {
+                'processing_status': ProcessingStatus.FAILED.value,
+                'updated_at': datetime.now(timezone.utc).isoformat()
+            }
+            
+            if error_message:
+                update_data['processing_error'] = error_message
+            
+            result = self.client.table('clothes').update(update_data).eq('id', clothing_id).execute()
+            
+            if not result.data:
+                raise Exception(f"Kleidungsstück {clothing_id} nicht gefunden")
+            
+            self.logger.error(f"Kleidungsstück-Verarbeitung fehlgeschlagen: {clothing_id} - {error_message}")
+            return result.data[0]
+            
+        except APIError as e:
+            self.logger.error(f"Fehler beim Markieren als fehlgeschlagen: {e}")
+            raise
+    
+    def get_pending_clothing_items(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Holt alle Kleidungsstücke die auf Verarbeitung warten
+        
+        Args:
+            limit: Maximale Anzahl der Ergebnisse
+            
+        Returns:
+            Liste mit pending Kleidungsstücken
+        """
+        try:
+            result = self.client.table('clothes')\
+                .select('*')\
+                .eq('processing_status', ProcessingStatus.PENDING.value)\
+                .order('created_at', desc=False)\
+                .limit(limit)\
+                .execute()
+            
+            return result.data or []
+            
+        except APIError as e:
+            self.logger.error(f"Fehler beim Laden der pending Kleidungsstücke: {e}")
+            raise
+    
+    def get_user_clothes_with_status(self, user_id: str, status: ProcessingStatus = None) -> List[Dict[str, Any]]:
+        """
+        Holt Kleidungsstücke eines Nutzers mit optionalem Status-Filter
+        
+        Args:
+            user_id: UUID des Nutzers
+            status: ProcessingStatus Filter (optional)
+            
+        Returns:
+            Liste mit Kleidungsstücken
+        """
+        try:
+            query = self.client.table('clothes').select('*').eq('user_id', user_id)
+            
+            if status:
+                query = query.eq('processing_status', status.value)
+            
+            result = query.order('created_at', desc=True).execute()
+            return result.data or []
+            
+        except APIError as e:
+            self.logger.error(f"Fehler beim Laden der Kleidungsstücke mit Status: {e}")
+            raise
+
+    # ======================
+    # CLOTHES MANAGEMENT (ORIGINAL METHODS)
     # ======================
     
     def add_clothing_item(self, user_id: str, image_url: str, category: str,
@@ -157,6 +383,7 @@ class DatabaseManager:
                 'color': color,
                 'style': style,
                 'season': season,
+                'processing_status': ProcessingStatus.COMPLETED.value,  # Direkt completed wenn manuell hinzugefügt
                 'created_at': datetime.now(timezone.utc).isoformat(),
                 'updated_at': datetime.now(timezone.utc).isoformat()
             }
