@@ -202,68 +202,48 @@ class ClothingAI:
         with open(image_path, "rb") as image_file:
             return base64.b64encode(image_file.read()).decode('utf-8')
     
-    def extract_clothing(self, image_content: bytes) -> Dict[str, Any]:
+    def extract_clothing(self, image_content: bytes) -> bytes:
         """
-        Extrahiert Kleidungsstücke aus einem Bild mit OpenAI Vision API
+        Extrahiert Kleidungsstücke aus einem Bild (Hintergrund entfernen)
+        
+        Für jetzt geben wir das ursprüngliche Bild zurück.
+        TODO: Implementiere echte Hintergrund-Entfernung
         
         Args:
             image_content: Binärdaten des Bildes
             
         Returns:
-            Dict mit extrahierten Kleidungsstücken
+            Bytes des verarbeiteten Bildes
         """
         try:
-            base64_image = self.encode_image("test_2.jpg")
-    
-            prompt = "Erstelle ein fotorealistisches Bild des Kleidungsstücks aus dem Referenzbild, isoliert auf weißem Hintergrund."
-
-            response = self.client.responses.create(
-                model="gpt-4.1",
-                input=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "input_text", "text": prompt},
-                            {
-                                "type": "input_image",
-                                "image_url": f"data:image/jpeg;base64,{base64_image}",
-                            },
-                        ],
-                    }
-                ],
-                tools=[{
-            "type": "image_generation",
-            "quality": "high", 
-            }],
-            )
-
-            # Token-Verbrauch anzeigen
-            if hasattr(response, 'usage'):
-                usage = response.usage
-                input_tokens = usage.input_tokens
-                output_tokens = usage.output_tokens
-                total_tokens = usage.total_tokens
-    # Zusätzliche Details falls verfügbar
-            else:
-                input_tokens = None
-                output_tokens = None
-                total_tokens = None
-
-            # Extrahiere das generierte Bild
-            image_generation_calls = [
-                output for output in response.output if output.type == "image_generation_call"
-            ]
-
-            if image_generation_calls:
-                image_base64 = image_generation_calls[0].result
-                with open("ergebnis.png", "wb") as f:
-                    f.write(base64.b64decode(image_base64))
-                return {"status": "success", "image": image_base64, "input_tokens": input_tokens, "output_tokens": output_tokens, "total_tokens": total_tokens}
-            else:
-                return {"status": "error"}
+            # Für jetzt: geben wir das Original-Bild zurück
+            # TODO: Hier echte Hintergrund-Entfernung implementieren
+            self.logger.info("Hintergrund-Entfernung (Placeholder - gibt Original zurück)")
+            return image_content
+            
         except Exception as e:
-            self.logger.error(f"Fehler bei der Kleidungsanalyse: {e}")
-            return {"status": "error"}
+            self.logger.error(f"Fehler bei der Hintergrund-Entfernung: {e}")
+            raise
+    
+    def health_check(self) -> bool:
+        """
+        Überprüft die Verbindung zur OpenAI API
+        
+        Returns:
+            True wenn API erreichbar ist
+        """
+        try:
+            # Einfacher Test-Call zur OpenAI API
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": "Hallo"}],
+                max_tokens=5
+            )
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Health Check fehlgeschlagen: {e}")
+            return False
 
             
 
